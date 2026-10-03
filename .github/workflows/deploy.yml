@@ -1,0 +1,33 @@
+# push 到 main 時自動部署到 Cloudflare Pages（專案 icon → icon-5n8.pages.dev）
+# 需要的 GitHub Secrets：CLOUDFLARE_API_TOKEN、CLOUDFLARE_ACCOUNT_ID
+name: Deploy to Cloudflare Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # 只上傳圖示檔：排除 .git、.github 與 .zip 打包檔
+      - name: Prepare site files
+        run: |
+          mkdir -p "$RUNNER_TEMP/site"
+          rsync -a --exclude='.git' --exclude='.github' --exclude='*.zip' ./ "$RUNNER_TEMP/site/"
+          ls -la "$RUNNER_TEMP/site"
+
+      - name: Deploy to Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          wranglerVersion: "4.147.0"
+          command: pages deploy ${{ runner.temp }}/site --project-name=icon --branch=main --commit-dirty=true
