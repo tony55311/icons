@@ -21,13 +21,46 @@ hsv = cv2.cvtColor(im, cv2.COLOR_BGR2HSV)
 m = ((hsv[..., 1] < 70) & (hsv[..., 2] > 190)).astype(np.uint8) * 255
 m = cv2.medianBlur(m, 9)
 m = cv2.morphologyEx(m, cv2.MORPH_OPEN, np.ones((9, 9), np.uint8))
+
+def fix_S(m, box=(12, 18, 73, 74)):
+    """Rebuild the S of SOON: solid silhouette, then cut two clean teardrop
+    counters + slits (coords in original-image px, measured from src2.jpg)
+    with >=0.7 mm width so they survive printing."""
+    x0, y0, x1, y1 = (v * UP for v in box)
+    S = (m[y0:y1, x0:x1] > 0).astype(np.uint8)
+    n, l, st, _ = cv2.connectedComponentsWithStats(S)
+    big = 1 + np.argmax(st[1:, 4])
+    near = cv2.dilate((l == big).astype(np.uint8), np.ones((41, 41), np.uint8))
+    keep = np.zeros_like(S)
+    for i in range(1, n):
+        if st[i, 4] > 200 and (i == big or near[l == i].any()): keep[l == i] = 1
+    ell = lambda k: cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (k, k))
+    B = 40
+    solid = cv2.copyMakeBorder(keep, B, B, B, B, cv2.BORDER_CONSTANT, value=0)
+    solid = cv2.morphologyEx(solid, cv2.MORPH_CLOSE, ell(41))
+    ff = solid.copy(); pad = np.zeros((ff.shape[0] + 2, ff.shape[1] + 2), np.uint8)
+    cv2.floodFill(ff, pad, (0, 0), 1); solid[ff == 0] = 1
+    solid = cv2.morphologyEx(solid, cv2.MORPH_OPEN, ell(21))[B:-B, B:-B].copy()
+    P = lambda x, y: (int((x - box[0]) * UP), int((y - box[1]) * UP))
+    W = int(6.0 * UP)            # slit width ~0.7 mm
+    # upper counter: round end on the left, slit opens to the right edge
+    cv2.circle(solid, P(48.5, 39.0), int(3.4 * UP), 0, -1, cv2.LINE_AA)
+    cv2.line(solid, P(48.5, 39.0), P(74, 45.0), 0, W, cv2.LINE_AA)
+    # lower counter: round end on the right, slit opens to the left edge
+    cv2.circle(solid, P(41.5, 61.0), int(3.6 * UP), 0, -1, cv2.LINE_AA)
+    cv2.line(solid, P(41.5, 61.0), P(12, 56.5), 0, W, cv2.LINE_AA)
+    m[y0:y1, x0:x1] = np.where(solid > 0, 255, 0).astype(np.uint8)
+    return m
+m = fix_S(m)
+cv2.imwrite('mask_fixS.png', m[10*UP:80*UP, 0:90*UP])
 cnts, hier = cv2.findContours(m, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_NONE)
 hier = hier[0]; H = m.shape[0]
 def pts(c):
     p = c[:, 0, :].astype(float); p[:, 1] = H - p[:, 1]; return p
 polys = []
 for i, c in enumerate(cnts):
-    if hier[i][3] != -1 or cv2.contourArea(c) < 800 * UP * UP / 4: continue
+    x0, y0, bw, bh = cv2.boundingRect(c)
+    if hier[i][3] != -1 or cv2.contourArea(c) < 40 * UP * UP or y0 < 6 * UP: continue  # drop specks / top-edge junk
     holes, j = [], hier[i][2]
     while j != -1:
         if cv2.contourArea(cnts[j]) > 60 * UP * UP / 4: holes.append(pts(cnts[j]))
