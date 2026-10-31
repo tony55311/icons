@@ -1,6 +1,7 @@
+import sys
 import trimesh, numpy as np
 from PIL import Image
-b = trimesh.load('../SOON_keychain_base_orange.stl'); t = trimesh.load('../SOON_keychain_text_white.stl')
+b = trimesh.load(sys.argv[1]); t = trimesh.load(sys.argv[2])
 def rot(el, az):
     a, e = np.radians(az), np.radians(el)
     Rz = np.array([[np.cos(a), -np.sin(a), 0], [np.sin(a), np.cos(a), 0], [0, 0, 1]])
@@ -37,4 +38,4 @@ def render(R, W=700, Hh=700):
     return Image.fromarray((img * 255).astype(np.uint8))
 a = render(rot(0, 0)); c = render(rot(-50, -25))
 out = Image.new('RGB', (1400, 700)); out.paste(a, (0, 0)); out.paste(c, (700, 0))
-out.save('../preview.png')
+out.save(sys.argv[3])
