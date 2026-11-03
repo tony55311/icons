@@ -13,7 +13,7 @@ T_TOTAL, T_TOP = 3.0, 1.0  # total thickness, colored top layer
 STRIP_X, STRIP_W = 0.9, 3.8           # date strips (black box + white digits)
 PANEL = (9.4, 22.6)                    # white centre panel x-range
 CHAR_X = (5.6, 26.4)                   # characters fit into this x-range
-DATE = "20251128"
+DATE = "20261128"
 HOLE_D, EAR_R = 4.0, 4.4
 EAR_C = (2.6, H + 1.4)
 
@@ -84,6 +84,10 @@ boxes = unary_union(black_boxes); dig = unary_union(white_digits)
 
 # ---- top-layer colour regions ----
 panel = box(PANEL[0], -1, PANEL[1], H + 1).intersection(body)
+# white backing behind the whole 洋流 footprint (fills every gap between strokes)
+halo = chars.buffer(3.0, quad_segs=24).buffer(-2.2, quad_segs=24)
+halo = unary_union([Polygon(g.exterior) for g in getattr(halo, 'geoms', [halo])])
+panel = unary_union([panel, halo.difference(boxes.buffer(0.6))]).intersection(body)
 black_top = unary_union([chars, boxes.difference(dig)]).intersection(outline)
 white_top = unary_union([panel.difference(chars), dig]).intersection(outline).difference(black_top)
 orange_top = outline.difference(black_top).difference(white_top)
