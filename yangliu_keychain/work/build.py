@@ -82,12 +82,37 @@ for side in ('L', 'R'):
         black_boxes.append(bx); white_digits.append(d)
 boxes = unary_union(black_boxes); dig = unary_union(white_digits)
 
+# ---- 洋流 from a real font (replaces the traced, jagged version) ----
+cjk = FontProperties(fname='/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc')
+def glyph(ch):
+    # nonzero winding: fonts overlap stroke contours, so even-odd would punch holes
+    tp = TextPath((0, 0), ch, size=10, prop=cjk)
+    rings = [r for r in tp.to_polygons() if len(r) > 2]
+    sa = [Polygon(r).exterior.is_ccw for r in rings]
+    big = max(range(len(rings)), key=lambda i: Polygon(rings[i]).area)
+    outer = [Polygon(r).buffer(0) for r, c in zip(rings, sa) if c == sa[big]]
+    inner = [Polygon(r).buffer(0) for r, c in zip(rings, sa) if c != sa[big]]
+    return unary_union(outer).difference(unary_union(inner)) if inner else unary_union(outer)
+CW = CHAR_X[1] - CHAR_X[0]
+EMB = 0.12                       # extra weight, closer to the heavy look of the source
+gl = []
+for ch in '洋流':
+    g = glyph(ch); gb = g.bounds
+    k = (CW - 2 * EMB) / (gb[2] - gb[0])
+    g = affinity.scale(g, k, k, origin=(gb[0], gb[1]))
+    gl.append(affinity.translate(g, CHAR_X[0] + EMB - gb[0], -gb[1]))
+GAP = 1.6
+h0 = gl[0].bounds[3] - gl[0].bounds[1]; h1 = gl[1].bounds[3] - gl[1].bounds[1]
+tot = h0 + h1 + GAP + 2 * EMB
+y0 = (H - tot) / 2 + EMB
+chars = unary_union([affinity.translate(gl[1], 0, y0), affinity.translate(gl[0], 0, y0 + h1 + GAP + 2 * EMB)])
+chars = chars.buffer(EMB, join_style=2, mitre_limit=2.0)
+chars = chars.buffer(0.2, join_style=2, mitre_limit=2.0).buffer(-0.2, join_style=2, mitre_limit=2.0)  # close slivers <0.6 mm
+cb = chars.bounds
+print('chars %.1f x %.1f mm, y %.1f-%.1f' % (cb[2] - cb[0], cb[3] - cb[1], cb[1], cb[3]))
+
 # ---- top-layer colour regions ----
 panel = box(PANEL[0], -1, PANEL[1], H + 1).intersection(body)
-# white backing behind the whole 洋流 footprint (fills every gap between strokes)
-halo = chars.buffer(3.0, quad_segs=24).buffer(-2.2, quad_segs=24)
-halo = unary_union([Polygon(g.exterior) for g in getattr(halo, 'geoms', [halo])])
-panel = unary_union([panel, halo.difference(boxes.buffer(0.6))]).intersection(body)
 black_top = unary_union([chars, boxes.difference(dig)]).intersection(outline)
 white_top = unary_union([panel.difference(chars), dig]).intersection(outline).difference(black_top)
 orange_top = outline.difference(black_top).difference(white_top)

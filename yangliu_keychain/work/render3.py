@@ -14,6 +14,7 @@ def render(R, W=700, Hh=700):
     for m, col in MS:
         v = (m.triangles - c0) @ R.T
         n = m.face_normals @ R.T
+        vis = n[:, 2] > 1e-3; v = v[vis]; n = n[vis]
         sh = 0.35 + 0.65 * np.clip(n @ L, 0, 1)
         tris.append(v); cols.append(np.array(col)[None] * sh[:, None])
     tris = np.concatenate(tris); cols = np.concatenate(cols)
