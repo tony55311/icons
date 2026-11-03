@@ -58,7 +58,16 @@ def text_poly(t, size):
     tp = TextPath((0, 0), t, size=size, prop=fp)
     rings = [Polygon(r) for r in tp.to_polygons() if len(r) > 2]
     return reduce(lambda a, b: a.symmetric_difference(b), rings).buffer(0)
-digits = text_poly(DATE, 3.55).buffer(0.08, quad_segs=8)   # embolden -> ~0.6 mm strokes
+raw = text_poly(DATE, 3.55)
+EMB_D, HOLE_GROW = 0.08, 0.10   # embolden outside (~0.6 mm strokes) but OPEN UP the counters of 0/6/8
+digits = unary_union([
+    Polygon(p.exterior).buffer(EMB_D, quad_segs=8).difference(
+        unary_union([Polygon(h).buffer(HOLE_GROW, quad_segs=12) for h in p.interiors]))
+    for p in getattr(raw, 'geoms', [raw])])
+for p in getattr(raw, 'geoms', [raw]):
+    for h in p.interiors:
+        hb = Polygon(h).bounds; gb = Polygon(h).buffer(HOLE_GROW).bounds
+        print('counter %.2fx%.2f -> %.2fx%.2f mm' % (hb[2]-hb[0], hb[3]-hb[1], gb[2]-gb[0], gb[3]-gb[1]))
 db = digits.bounds
 digits = affinity.translate(digits, -db[0], -db[1])
 L, Dh = db[2] - db[0], db[3] - db[1]
@@ -133,4 +142,5 @@ print('digit text len %.1f mm, height %.2f mm, gap %.1f' % (L, Dh, gap))
 for w in (0.4, 0.5, 0.6):
     for nm, g in (('digits', dig), ('chars', chars)):
         print(f'{nm}: area lost at min stroke {w}: {1 - g.buffer(-w/2).buffer(w/2).area / g.area:.3f}')
-orange.export('../yangliu_orange.stl'); white.export('../yangliu_white.stl'); black.export('../yangliu_black.stl')
+P = sys.argv[2] if len(sys.argv) > 2 else '../yangliu'
+orange.export(P + '_orange.stl'); white.export(P + '_white.stl'); black.export(P + '_black.stl')
